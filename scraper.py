@@ -1,5 +1,6 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+from lxml import html
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -15,12 +16,41 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    return list()
+
+    # ------------
+    # check response
+    if resp.status != 200: 
+        print(resp.error)
+        return list() # empty list
+    
+    try: # 200 but no info
+        tree = html.fromstring(resp.raw_response.content) # parse content
+    except: 
+        print(f'{resp.url} cannot be parsed')
+        return list()
+        
+    hrefs = tree.xpath('//a[@href]/@href') # extract all <a> tags that have href; return href value
+    # print(resp.url)
+    # print(hrefs)    
+
+    links = [urljoin(resp.url, href) for href in hrefs]  # some urls are relative - convert these to absolute
+
+    with open('found_urls.txt', 'a+') as f: # quick local save
+        for link in links: f.write(f'\n{link}')
+    
+    return links
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
     # If you decide to crawl it, return True; otherwise return False.
     # There are already some conditions that return False.
+
+    # conditions:
+    # only the domains specified in assignment
+    # clean url (i.e. remove fragments)
+    # avoid infinite loops
+    # avoid large files/files with low info value
+    
     try:
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
