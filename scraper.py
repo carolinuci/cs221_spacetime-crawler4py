@@ -1,6 +1,53 @@
 import re
+from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
+import hashlib
+
+visited_hashes = set()
+
+def is_resp_low_value(resp):
+
+    # Check if response is valid and has content
+    if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
+        return True
+    
+    try:
+        # Create BeautifulSoup object from the response content
+        soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
+        
+        # Get text content and remove extra whitespace
+        text_content = ' '.join(soup.get_text().split())
+        
+        # If the page has very little text content, consider it low info
+        if len(text_content) < 50:  # You can adjust this threshold
+            return True
+        
+        # Duplicate Content Check
+        content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
+        if content_hash in visited_hashes:
+            return True
+        visited_hashes.add(content_hash)
+
+        # High Link-to-Text Ratio Check
+        links = soup.find_all('a')
+        link_count = len(links)
+        text_length = max(1, len(text_content))
+        if link_count / text_length > 5:
+            return True 
+            
+        # Large File Size Check
+        if resp.raw_response.headers.get('Content-Length'):
+            file_size = int(resp.raw_response.headers['Content-Length'])
+            if file_size > 10 * 1024 * 1024:  # 10 MB threshold
+                return True
+
+        return False
+        
+    except Exception as e:
+
+        print(f"Error parsing content from {resp.url}: {str(e)}")
+        return True
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -27,6 +74,9 @@ def extract_next_links(url, resp):
         tree = html.fromstring(resp.raw_response.content) # parse content
     except: 
         print(f'{resp.url} cannot be parsed')
+        return list()
+    
+    if is_resp_low_value(resp):
         return list()
         
     hrefs = tree.xpath('//a[@href]/@href') # extract all <a> tags that have href; return href value
