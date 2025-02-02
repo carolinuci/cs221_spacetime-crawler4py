@@ -3,13 +3,21 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
 import hashlib
+import logging
+
+# Setup logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 visited_hashes = set()
 
 def is_resp_low_value(resp):
-
     # Check if response is valid and has content
     if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
+        logger.info(f"Low value response for {resp.url}: Invalid response or no content")
         return True
     
     try:
@@ -21,11 +29,13 @@ def is_resp_low_value(resp):
         
         # If the page has very little text content, consider it low info
         if len(text_content) < 50:  # You can adjust this threshold
+            logger.info(f"Low value response for {resp.url}: Text content too short ({len(text_content)} chars)")
             return True
         
         # Duplicate Content Check
         content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
         if content_hash in visited_hashes:
+            logger.info(f"Low value response for {resp.url}: Duplicate content detected")
             return True
         visited_hashes.add(content_hash)
 
@@ -34,19 +44,20 @@ def is_resp_low_value(resp):
         link_count = len(links)
         text_length = max(1, len(text_content))
         if link_count / text_length > 5:
+            logger.info(f"Low value response for {resp.url}: High link-to-text ratio ({link_count} links, {text_length} chars)")
             return True 
             
         # Large File Size Check
         if resp.raw_response.headers.get('Content-Length'):
             file_size = int(resp.raw_response.headers['Content-Length'])
             if file_size > 10 * 1024 * 1024:  # 10 MB threshold
+                logger.info(f"Low value response for {resp.url}: File too large ({file_size/1024/1024:.2f} MB)")
                 return True
 
         return False
         
     except Exception as e:
-
-        print(f"Error parsing content from {resp.url}: {str(e)}")
+        logger.info(f"Error parsing content from {resp.url}: {str(e)}")
         return True
 
 def scraper(url, resp):
@@ -67,13 +78,13 @@ def extract_next_links(url, resp):
     # ------------
     # check response
     if resp.status != 200: 
-        print(resp.error)
+        logger.info(resp.error)
         return list() # empty list
     
     try: # 200 but no info
         tree = html.fromstring(resp.raw_response.content) # parse content
     except: 
-        print(f'{resp.url} cannot be parsed')
+        logger.info(f'{resp.url} cannot be parsed')
         return list()
     
     if is_resp_low_value(resp):
@@ -116,5 +127,5 @@ def is_valid(url):
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
 
     except TypeError:
-        print ("TypeError for ", parsed)
+        logger.info(f"TypeError for {parsed}")
         raise
