@@ -3,21 +3,12 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
 import hashlib
-import logging
-
-# Setup logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 visited_hashes = set()
 
 def is_resp_low_value(resp):
     # Check if response is valid and has content
     if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
-        logger.info(f"Low value response for {resp.url}: Invalid response or no content")
         return True
     
     try:
@@ -29,13 +20,11 @@ def is_resp_low_value(resp):
         
         # If the page has very little text content, consider it low info
         if len(text_content) < 50:  # You can adjust this threshold
-            logger.info(f"Low value response for {resp.url}: Text content too short ({len(text_content)} chars)")
             return True
         
         # Duplicate Content Check
         content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
         if content_hash in visited_hashes:
-            logger.info(f"Low value response for {resp.url}: Duplicate content detected")
             return True
         visited_hashes.add(content_hash)
 
@@ -44,20 +33,17 @@ def is_resp_low_value(resp):
         link_count = len(links)
         text_length = max(1, len(text_content))
         if link_count / text_length > 5:
-            logger.info(f"Low value response for {resp.url}: High link-to-text ratio ({link_count} links, {text_length} chars)")
             return True 
             
         # Large File Size Check
         if resp.raw_response.headers.get('Content-Length'):
             file_size = int(resp.raw_response.headers['Content-Length'])
             if file_size > 10 * 1024 * 1024:  # 10 MB threshold
-                logger.info(f"Low value response for {resp.url}: File too large ({file_size/1024/1024:.2f} MB)")
                 return True
 
         return False
         
-    except Exception as e:
-        logger.info(f"Error parsing content from {resp.url}: {str(e)}")
+    except Exception:
         return True
 
 def scraper(url, resp):
@@ -77,22 +63,18 @@ def extract_next_links(url, resp):
 
     # ------------
     # check response
-    if resp.status != 200: 
-        logger.info(resp.error)
+    if resp.status != 200:
         return list() # empty list
     
     try: # 200 but no info
         tree = html.fromstring(resp.raw_response.content) # parse content
     except: 
-        logger.info(f'{resp.url} cannot be parsed')
         return list()
     
     if is_resp_low_value(resp):
         return list()
         
     hrefs = tree.xpath('//a[@href]/@href') # extract all <a> tags that have href; return href value
-    # print(resp.url)
-    # print(hrefs)    
 
     links = [urljoin(resp.url, href) for href in hrefs]  # some urls are relative - convert these to absolute
 
@@ -110,7 +92,35 @@ def is_valid(url):
     # only the domains specified in assignment
     # clean url (i.e. remove fragments)
     # avoid infinite loops
+    #    (avoid by using the block list pattern)
     # avoid large files/files with low info value
+    #   (Checked by Using the is_resp_low_value function above)
+
+    # Other conditions to avoid:
+    # Loggin/logout sessions, cart, checkout, etc.
+    # Example:
+    # BLOCKLIST_PATTERNS = [
+    #     r".*[\?&]page=.*",
+    #     r".*[\?&]sort=.*",
+    #     r".*[\?&](sessionid|sid|phpsessid)=.*",
+    #     r".*\.(mp3|mp4|avi|wmv|flv|doc|docx|ppt|pptx|xls|xlsx)$",
+    #     r".*\/(assets|static|public|dist)\/.*",
+    #     r"^mailto:.*",
+    #     r"^tel:.*",
+    #     r".*[\?&](search|query|q|term)=.*",
+    #     r".*[\?&](comment|replytocom)=.*",
+    #     r".*\/(202\d|199\d|20\d{2})\/.*",  # Matches years from 1990 to 2029
+    #     r".*[\?&](token|auth|key)=.*",
+    #     r".*\.(rss|xml|atom)$",
+    #     r".*[\?&]lang=.*",
+    #     r".*\/(en|fr|de|es|jp)\/.*",
+    #     r".*[\?&](affiliate|partner|ref)=.*",
+    #     r".*[\?&](debug|test)=.*",
+    #     r".*\/(api|v1|json|graphql)\/.*",
+    #     r".*\/(status|heartbeat|healthcheck)\/.*",
+    # ]
+
+
     
     try:
         parsed = urlparse(url)
@@ -127,5 +137,4 @@ def is_valid(url):
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
 
     except TypeError:
-        logger.info(f"TypeError for {parsed}")
         raise
