@@ -43,7 +43,8 @@ def is_resp_low_value(resp):
 
         return False
         
-    except Exception:
+    except Exception as e:
+        print(f"Error parsing content from {resp.url}: {str(e)}")
         return True
 
 def scraper(url, resp):
@@ -64,11 +65,13 @@ def extract_next_links(url, resp):
     # ------------
     # check response
     if resp.status != 200:
+        print(resp.error)
         return list() # empty list
     
     try: # 200 but no info
         tree = html.fromstring(resp.raw_response.content) # parse content
     except: 
+        print(f'{resp.url} cannot be parsed')
         return list()
     
     if is_resp_low_value(resp):
@@ -137,4 +140,5 @@ def is_valid(url):
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
 
     except TypeError:
+        print ("TypeError for ", parsed)
         raise
