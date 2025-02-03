@@ -1,6 +1,99 @@
 import re
+from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
+import tldextract
+import hashlib
+
+visited_hashes = set()
+
+def parse_url(url):
+    # Remove URL fragment
+    url = url.split('#')[0]
+    parsed = urlparse(url)
+    return parsed
+
+
+def get_full_domain(url):
+    extracted = tldextract.extract(url)
+    # Reconstruct the domain with subdomain
+    domain_parts = [part for part in [extracted.subdomain, extracted.domain, extracted.suffix] if part]
+    full_domain = '.'.join(domain_parts)
+    return full_domain
+
+def is_domain_allowed(full_domain):
+    allowed_domains = [
+        'ics.uci.edu',
+        'cs.uci.edu',
+        'informatics.uci.edu',
+        'stat.uci.edu',
+    ]
+    return any(full_domain.endswith(allowed_domain) for allowed_domain in allowed_domains)
+
+def is_today_uci_url_allowed(parsed_url):
+    allowed_today_prefix = '/department/information_computer_sciences/'
+    return parsed_url.path.startswith(allowed_today_prefix)
+
+def is_allowed_url(url):
+    try:
+        parsed_url = parse_url(url)
+        full_domain = get_full_domain(url)
+
+        # Check for HTTP or HTTPS scheme
+        if parsed_url.scheme not in ('http', 'https'):
+            return False
+
+        # Check if domain is 'today.uci.edu'
+        if full_domain == 'today.uci.edu':
+            return is_today_uci_url_allowed(parsed_url)
+        else:
+            return is_domain_allowed(full_domain)
+    except Exception as e:
+        # Handle exceptions, e.g., malformed URLs
+        print(f"Error processing URL {url}: {e}")
+        return False
+
+
+def is_resp_low_value(resp):
+    # Check if response is valid and has content
+    if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
+        return True
+    
+    try:
+        # Create BeautifulSoup object from the response content
+        soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
+        
+        # Get text content and remove extra whitespace
+        text_content = ' '.join(soup.get_text().split())
+        
+        # If the page has very little text content, consider it low info
+        if len(text_content) < 50:  # You can adjust this threshold
+            return True
+        
+        # Duplicate Content Check
+        content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
+        if content_hash in visited_hashes:
+            return True
+        visited_hashes.add(content_hash)
+
+        # High Link-to-Text Ratio Check
+        links = soup.find_all('a')
+        link_count = len(links)
+        text_length = max(1, len(text_content))
+        if link_count / text_length > 5:
+            return True 
+            
+        # Large File Size Check
+        if resp.raw_response.headers.get('Content-Length'):
+            file_size = int(resp.raw_response.headers['Content-Length'])
+            if file_size > 10 * 1024 * 1024:  # 10 MB threshold
+                return True
+
+        return False
+        
+    except Exception as e:
+        print(f"Error parsing content from {resp.url}: {str(e)}")
+        return True
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -19,7 +112,7 @@ def extract_next_links(url, resp):
 
     # ------------
     # check response
-    if resp.status != 200: 
+    if resp.status != 200:
         print(resp.error)
         return list() # empty list
     
@@ -28,12 +121,14 @@ def extract_next_links(url, resp):
     except: 
         print(f'{resp.url} cannot be parsed')
         return list()
+    
+    if is_resp_low_value(resp):
+        return list()
         
     hrefs = tree.xpath('//a[@href]/@href') # extract all <a> tags that have href; return href value
-    # print(resp.url)
-    # print(hrefs)    
 
-    links = [urljoin(resp.url, href) for href in hrefs]  # some urls are relative - convert these to absolute
+    # Modify this section to defragment URLs while creating absolute URLs
+    links = [urljoin(resp.url, href).split('#')[0] for href in hrefs]  # remove fragments and convert relative to absolute
 
     with open('found_urls.txt', 'a+') as f: # quick local save
         for link in links: f.write(f'\n{link}')
@@ -47,14 +142,52 @@ def is_valid(url):
 
     # conditions:
     # only the domains specified in assignment
-    # clean url (i.e. remove fragments)
     # avoid infinite loops
+    #    (avoid by using the block list pattern)
     # avoid large files/files with low info value
+    #   (Checked by Using the is_resp_low_value function above)
+
+    # Other conditions to avoid:
+    # Loggin/logout sessions, cart, checkout, etc.
+    # These might lead to infinite loops.
+    # Example:
+    BLOCKLIST_PATTERNS = [
+        r".*[\?&]page=.*",
+        r".*[\?&]sort=.*",
+        r".*[\?&](sessionid|sid|phpsessid)=.*",
+        r".*\.(mp3|mp4|avi|wmv|flv|doc|docx|ppt|pptx|xls|xlsx)$",
+        r".*\/(assets|static|public|dist)\/.*",
+        r"^mailto:.*",
+        r"^tel:.*",
+        r".*[\?&](search|query|q|term)=.*",
+        r".*[\?&](comment|replytocom)=.*",
+        r".*\/(202\d|199\d|20\d{2})\/.*",  # Matches years from 1990 to 2029
+        r".*[\?&](token|auth|key)=.*",
+        r".*\.(rss|xml|atom)$",
+        r".*[\?&]lang=.*",
+        r".*\/(en|fr|de|es|jp)\/.*",
+        r".*[\?&](affiliate|partner|ref)=.*",
+        r".*[\?&](debug|test)=.*",
+        r".*\/(api|v1|json|graphql)\/.*",
+        r".*\/(status|heartbeat|healthcheck)\/.*",
+    ]
+
+
     
     try:
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
+
+        # Check against blocklist patterns
+        for pattern in BLOCKLIST_PATTERNS:
+            if re.match(pattern, url, re.IGNORECASE):
+                return False
+            
+        # Check if the URL is allowed within the allowed domains
+        if not is_allowed_url(url):
+            return False
+            
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
