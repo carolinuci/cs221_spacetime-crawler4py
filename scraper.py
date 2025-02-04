@@ -6,6 +6,7 @@ import tldextract
 import hashlib
 
 visited_hashes = set()
+visited_urls = set()  # Add this new set to track visited URLs
 
 def parse_url(url):
     # Remove URL fragment
@@ -111,6 +112,11 @@ def extract_next_links(url, resp):
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
 
     # ------------
+    # Check if we've seen this URL before
+    if resp.url in visited_urls:
+        return list()
+    visited_urls.add(resp.url)
+    
     # check response
     if resp.status != 200:
         print(resp.error)
