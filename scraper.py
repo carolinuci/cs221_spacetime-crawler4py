@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
 import tldextract
-import hashlib
 
 visited_hashes = set()
 visited_urls = set()  # Add this new set to track visited URLs
@@ -71,8 +70,8 @@ def is_resp_low_value(resp):
         if len(text_content) < 50:  # You can adjust this threshold
             return True
         
-        # Duplicate Content Check
-        content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
+        # Duplicate Content Check using Python's built-in hash function
+        content_hash = hash(text_content)
         if content_hash in visited_hashes:
             return True
         visited_hashes.add(content_hash)
