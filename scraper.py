@@ -3,10 +3,10 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from lxml import html
 import tldextract
-import hashlib
 from utils.tokenize import tokenize_from_text
 
 visited_hashes = set()
+visited_urls = set()  # Add this new set to track visited URLs
 
 def parse_url(url):
     # Remove URL fragment
@@ -123,8 +123,8 @@ def is_resp_low_value(resp):
         if len(text_content) < 50:  # You can adjust this threshold
             return True
         
-        # Duplicate Content Check
-        content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
+        # Duplicate Content Check using Python's built-in hash function
+        content_hash = hash(text_content)
         if content_hash in visited_hashes:
             return True
         visited_hashes.add(content_hash)
@@ -164,6 +164,11 @@ def extract_next_links(url, resp):
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
 
     # ------------
+    # Check if we've seen this URL before
+    if resp.url in visited_urls:
+        return list()
+    visited_urls.add(resp.url)
+    
     # check response
     if resp.status != 200:
         print(resp.error)
@@ -183,9 +188,11 @@ def extract_next_links(url, resp):
     # Modify this section to defragment URLs while creating absolute URLs
     links = [urljoin(resp.url, href).split('#')[0] for href in hrefs]  # remove fragments and convert relative to absolute
 
-    n = get_number_of_words(resp, "w")
+    n = get_number_of_words(resp, "w")   
     with open('found_urls.txt', 'a+') as f: # quick local save
-        for link in links: f.write(f'\n{link},{n}')
+        for link in links: 
+            if link not in visited_urls:
+                f.write(f"\n{url} - {n}")
     
     return links
 
