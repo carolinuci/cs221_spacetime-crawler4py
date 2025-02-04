@@ -4,6 +4,7 @@ from urllib.parse import urlparse, urljoin
 from lxml import html
 import tldextract
 import hashlib
+from utils.tokenize import tokenize_from_text
 
 visited_hashes = set()
 
@@ -52,6 +53,58 @@ def is_allowed_url(url):
         # Handle exceptions, e.g., malformed URLs
         print(f"Error processing URL {url}: {e}")
         return False
+    
+def get_number_of_words(resp, mode=""):
+    # Check if response is valid and has content
+    result = 0
+    if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
+        return result
+
+    
+    try:
+        # Create BeautifulSoup object from the response content
+        soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
+        #print("caaaaaaaaa")
+        #print(soup.get_text().strip())
+        #print("caaaaaaaaa")
+        result = tokenize_from_text(soup.get_text().strip(), rtype='set')
+
+    except Exception as e:
+        print(f"Error count content from {resp.url}: {str(e)}")
+        return result
+    
+    if mode == "w":
+        import os
+        import time
+        
+        stopword_file = 'stopword.txt' ## TO FIX, make it global
+        stopwords = set()
+
+        # Read the stopword.txt file into a set for quick lookup
+        with open(stopword_file, 'r') as f:
+            stopwords = set(line.strip() for line in f)
+
+        for key in result:
+            if key not in stopwords:
+                key_folder = os.path.join("Logs", key)
+                
+                # Check if the subfolder for the key exists
+                if not os.path.exists(key_folder):
+                    # Create folder if it doesn't exist
+                    os.makedirs(key_folder)
+                
+                # Create a timestamp-based filename
+                timestamp = time.strftime('%Y%m%d%H%M%S')
+                filename = f'{timestamp}.txt'
+                
+                # Create the file inside the key folder
+                file_path = os.path.join(key_folder, filename)
+                with open(file_path, 'w') as f:
+                    f.write(f"Log file created at {timestamp}")
+                
+                print(f"Created file {file_path}")
+    
+    return len(result)
 
 
 def is_resp_low_value(resp):
@@ -130,8 +183,9 @@ def extract_next_links(url, resp):
     # Modify this section to defragment URLs while creating absolute URLs
     links = [urljoin(resp.url, href).split('#')[0] for href in hrefs]  # remove fragments and convert relative to absolute
 
+    n = get_number_of_words(resp, "w")
     with open('found_urls.txt', 'a+') as f: # quick local save
-        for link in links: f.write(f'\n{link}')
+        for link in links: f.write(f'\n{link},{n}')
     
     return links
 

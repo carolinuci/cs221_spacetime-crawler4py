@@ -23,6 +23,21 @@ def tokenize(text_file_path, rtype=""):
     return tokens
 
 
+def tokenize_from_text(text_content, rtype=""):
+    tokens = []
+    try:
+        text = text_content.lower()  # Convert the text to lowercase to ignore capitalization
+        # Use regex to extract words (alphanumeric characters)
+        tokens = re.findall(r'\b\w+\b', text)
+    except FileNotFoundError:
+        print(f"The file at {text_file_path} was not found.")
+
+    if rtype == "set":
+        return set(tokens)
+
+    return tokens
+
+
 # Method 2: computeWordFrequencies
 # Takes a list of tokens and returns a dictionary with the frequency of each token.
 def computeWordFrequencies(tokens):
