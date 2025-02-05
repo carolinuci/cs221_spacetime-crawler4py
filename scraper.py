@@ -86,23 +86,17 @@ def get_number_of_words(resp, mode=""):
 
         for key in result:
             if key not in stopwords:
-                key_folder = os.path.join("Logs", key)
-                
-                # Check if the subfolder for the key exists
-                if not os.path.exists(key_folder):
-                    # Create folder if it doesn't exist
-                    os.makedirs(key_folder)
-                
-                # Create a timestamp-based filename
-                timestamp = time.strftime('%Y%m%d%H%M%S')
-                filename = f'{timestamp}.txt'
-                
-                # Create the file inside the key folder
-                file_path = os.path.join(key_folder, filename)
-                with open(file_path, 'w') as f:
-                    f.write(f"Log file created at {timestamp}")
-                
-                print(f"Created file {file_path}")
+
+                # Define the path to the log file using the key
+                file_path = os.path.join("Logs", f"{key}.k")
+
+                # Create the file if it doesn't exist, or append to it if it does
+                with open(file_path, 'a') as f:
+                    timestamp = time.strftime('%Y%m%d%H%M%S')
+                    f.write( f"{timestamp}\n")
+
+                #print(f"Appended to file {file_path}")
+
     
     return len(result)
 

@@ -65,7 +65,7 @@ def extract_max_column_value(file_path):
         # Extract the second column (after the comma) and find the maximum value
         for url in file_content:
             # Match the number after the comma in the URL (e.g., '21' or '370')
-            match = re.search(r',(\d+)', url)
+            match = re.search(r' - (\d+)', url)
             if match:
                 value = int(match.group(1))
                 if value > max_value:
@@ -84,7 +84,9 @@ def list_and_sort_directories_by_file_count(parent_dir):
     # Linux command to list and sort directories by the number of files
     #command = f"find {parent_dir} -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo -n \"{{}} \"; find \"{{}}\" -type f | wc -l' \; | sort -k2 -n -r"
     # limit 50
-    command = f"find {parent_dir} -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo -n \"{{}} \"; find \"{{}}\" -type f | wc -l' \; | sort -k2 -n -r | head -n 50"
+    command = 'find '+ parent_dir + ' -type f -name "*.k" -exec wc -l {} + | sort -n -r | head -n 50'
+
+    #command = f"find {parent_dir} -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo -n \"{{}} \"; find \"{{}}\" -type f | wc -l' \; | sort -k2 -n -r | head -n 50"
     try:
         # Run the command and get the output
         result = subprocess.check_output(command, shell=True, text=True)
