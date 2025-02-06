@@ -48,7 +48,45 @@ def count_subdomains_from_file(file_path):
     except FileNotFoundError:
         print(f"Error: The file '{file_path}' was not found.")
         return 0
+
+# Function to parse the URLs and count unique pages for each subdomain
+def process_urls(input_file):
+    from urllib.parse import urlparse
+    from collections import defaultdict
     
+    subdomain_count = defaultdict(set)  # This will store unique URLs for each subdomain
+
+    # Read the file and process each line
+    with open(input_file, 'r') as file:
+        for line in file:
+            # Strip the line of extra whitespace and split it into URL and count part
+            
+            if line.strip() != "":
+                url, count = line.strip().split(" - ")
+            
+                count = int(count)  # Convert the count to an integer
+            
+                # Parse the URL to extract the subdomain
+                parsed_url = urlparse(url)
+                # Extract subdomain, assuming the URL has a format like http://subdomain.domain
+                domain_parts = parsed_url.hostname.split('.')
+           
+                if len(domain_parts) > 2 and domain_parts[-2:] == ['uci', 'edu'] and domain_parts[-3] == 'ics':
+                    subdomain = domain_parts[0]
+                    subdomain_url = f"http://{subdomain}.ics.uci.edu"
+                    # Add the URL to the set for this subdomain (ignoring duplicates)
+                    subdomain_count[subdomain_url].add(url)
+
+    
+        # Sort the subdomains alphabetically
+        sorted_subdomains = sorted(subdomain_count.items())
+    
+        # Output the results
+        for subdomain_url, urls in sorted_subdomains:
+            unique_count = len(urls)  # The number of unique URLs for this subdomain
+            print(f"{subdomain_url}, {unique_count}")
+
+
 
 def extract_max_column_value(file_path):
     """
@@ -84,7 +122,7 @@ def list_and_sort_directories_by_file_count(parent_dir):
     # Linux command to list and sort directories by the number of files
     #command = f"find {parent_dir} -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo -n \"{{}} \"; find \"{{}}\" -type f | wc -l' \; | sort -k2 -n -r"
     # limit 50
-    command = 'find '+ parent_dir + ' -type f -name "*.k" -exec wc -l {} + | sort -n -r | head -n 50'
+    command = 'find '+ parent_dir + ' -type f -name "*.k" -exec wc -l {} + | sort -n -r | head -n 52'
 
     #command = f"find {parent_dir} -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo -n \"{{}} \"; find \"{{}}\" -type f | wc -l' \; | sort -k2 -n -r | head -n 50"
     try:
@@ -92,7 +130,7 @@ def list_and_sort_directories_by_file_count(parent_dir):
         result = subprocess.check_output(command, shell=True, text=True)
         
         # Print the sorted directories with file counts
-        print("Most frequency words and counts:")
+        print("Most frequency words and counts(counts, keyword.k):")
         print(result)
 
     except subprocess.CalledProcessError as e:
@@ -130,6 +168,7 @@ if __name__ == "__main__":
 
 
      # Question 4. Count the subdomains from the file
-    subdomain_count = count_subdomains_from_file(file_path)
-    print(f"Number of subdomains for '*.ics.uci.edu' in {file_path}: {subdomain_count}")
+    process_urls(file_path)
+    #subdomain_count = count_subdomains_from_file(file_path)
+    #print(f"Number of subdomains for '*.ics.uci.edu' in {file_path}: {subdomain_count}")
 
